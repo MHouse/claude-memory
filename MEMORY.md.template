@@ -1,0 +1,34 @@
+# Cross-Project Memory Index
+
+Memories that apply across every project on this machine. Project-specific
+memories live in `~/.claude/projects/{slug}/memory/` and follow the same
+format.
+
+## Taxonomy (where new memories go)
+
+Currently a flat top level plus a `tools/` subdirectory. As more entries
+accumulate, organise by purpose:
+
+- `tools/{name}.md` — external systems, CLIs, vaults, services (Obsidian,
+  gcloud, gh, etc.).
+- `domain/{topic}/{topic}.md` — knowledge about a product, codebase, or
+  business area that spans multiple sessions. Treat as a staging area:
+  when content here matures, promote it to a skill or plugin and shrink
+  the memory file to a short pointer.
+- `general.md` — cross-cutting writing/workflow preferences. Create when
+  there's actually something general to record; don't ceremony-create
+  empty.
+
+User-level memories (identity, persistent preferences) sit at the top
+level rather than under a subdirectory — they don't fit `tools/` or
+`domain/`.
+
+## Maintenance
+
+Run `/consolidate-memory` (the `anthropic-skills:consolidate-memory`
+skill) periodically to merge duplicates, prune stale facts, fix orphan
+links, and surface promotion candidates. No-op on a small memory set —
+pays off after ~10+ entries or a few months of accumulation, whichever
+comes first.
+
+## Entries
