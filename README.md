@@ -96,6 +96,30 @@ appends the cross-project memory section if it isn't already there.
 Re-running is a no-op once the system is in place; existing customisations
 in `CLAUDE.md` are preserved.
 
+### Keeping in sync when this repo updates
+
+The script also detects **drift** — i.e., when an earlier bootstrap dropped
+content into `~/.claude/memory/MEMORY.md` or `~/.claude/CLAUDE.md` but the
+canonical version in this repo has since changed. Re-run the bootstrap and:
+
+- Default mode prints a diff and exits without touching anything.
+- `--force` (`-Force` on Windows) rewrites the drifted regions with the
+  current canonical content. Customisations *inside* the managed regions
+  are lost; everything outside them is preserved.
+- `--dry-run` (`-WhatIf` on Windows) shows what would change without
+  writing.
+
+The managed regions are intentionally narrow:
+
+| File | Managed region | Per-machine (never touched) |
+|---|---|---|
+| `~/.claude/memory/MEMORY.md` | Everything above the `## Entries` heading | The `## Entries` section and everything below it |
+| `~/.claude/CLAUDE.md` | The `## Cross-project memory` section (header through the next H2 or EOF) | Everything outside that section |
+
+Each managed region carries an HTML comment marker (`Section managed by
+the claude-memory bootstrap…`) so the ownership is visible in the file
+itself.
+
 For the manual recipe, see [BOOTSTRAP.md](BOOTSTRAP.md).
 
 ## Maintenance

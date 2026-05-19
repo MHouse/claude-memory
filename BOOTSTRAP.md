@@ -30,6 +30,30 @@ sections stay exactly where they are.
 After running, optionally seed `user_identity.md` (step 4) and verify
 (step 5). Done.
 
+### Flags
+
+| Flag (bash) | Flag (PowerShell) | Effect |
+|---|---|---|
+| (none) | (none) | Detect drift and print a diff, but write nothing. Default. |
+| `--force` | `-Force` | Rewrite drifted managed regions with the canonical content from this repo. Customisations *inside* the managed regions are lost. |
+| `--dry-run` | `-WhatIf` | Report intended actions, write nothing. Combines with `--force`. |
+
+### What "drift" means
+
+After the first bootstrap, the script's managed regions live inside two
+files. If a later update to this repo changes their canonical content,
+re-running the bootstrap will detect that your live files have drifted
+from the new canonical and offer to resync.
+
+| File | Managed region | Never touched |
+|---|---|---|
+| `~/.claude/memory/MEMORY.md` | Everything above `## Entries` | `## Entries` and everything below |
+| `~/.claude/CLAUDE.md` | The `## Cross-project memory` section (its H2 through the next H2 or EOF) | Everything outside that section |
+
+Each managed region carries an HTML comment marker so the ownership
+boundary is visible in the file itself. Edit *outside* the managed
+regions freely; treat *inside* them as upstream-owned.
+
 ### PowerShell execution policy
 
 If running `.\bootstrap.ps1` errors out with "running scripts is
