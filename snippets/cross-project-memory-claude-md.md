@@ -1,5 +1,7 @@
 ## Cross-project memory
 
+<!-- Section managed by the claude-memory bootstrap (re-run with -Force / --force to resync). -->
+
 `~/.claude/memory/` is the cross-project counterpart to the per-project
 auto-memory directory at `~/.claude/projects/<slug>/memory/`. The index
 lives at `~/.claude/memory/MEMORY.md`; entries linked from it are short

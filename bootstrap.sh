@@ -4,18 +4,40 @@
 # Idempotent setup:
 #   1. Creates ~/.claude/memory/ if absent.
 #   2. Seeds ~/.claude/memory/MEMORY.md from MEMORY.md.template if absent.
+#      If present, compares the *preamble* (everything above '## Entries')
+#      against the template and reports drift. The Entries section is
+#      per-machine and is never touched.
 #   3. Creates ~/.claude/CLAUDE.md with a minimal header if absent.
-#   4. Appends the Cross-project memory section to ~/.claude/CLAUDE.md if
-#      (and only if) the section isn't already present.
+#   4. Appends the cross-project memory section if absent. If present,
+#      compares the section body against the snippet and reports drift.
 #
-# Re-running is a no-op once the system is in place: nothing is
-# duplicated, nothing already on disk is overwritten.
+# Drift = file's managed region differs from canonical content in this
+# repo. Default: report with a diff, do not modify. Re-run with --force
+# to rewrite drifted regions; customisations inside them are lost,
+# customisations outside them are preserved.
 #
-# Run from a clone of MHouse/claude-memory:
-#
-#   ./bootstrap.sh
+# Flags:
+#   --force      Rewrite drifted managed regions with canonical content.
+#   --dry-run    Report intended actions, write nothing.
+#   -h, --help   Show usage.
 
 set -euo pipefail
+
+force=0
+dry_run=0
+
+usage() {
+    sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --force)   force=1; shift ;;
+        --dry-run) dry_run=1; shift ;;
+        -h|--help) usage; exit 0 ;;
+        *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
+    esac
+done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 claude_home="${HOME}/.claude"
@@ -25,61 +47,211 @@ claude_md="${claude_home}/CLAUDE.md"
 template="${repo_root}/MEMORY.md.template"
 snippet="${repo_root}/snippets/cross-project-memory-claude-md.md"
 
-[ -f "$template" ] || { echo "Template not found at $template -- run this script from a clone of MHouse/claude-memory." >&2; exit 1; }
-[ -f "$snippet"  ] || { echo "Snippet not found at $snippet -- run this script from a clone of MHouse/claude-memory." >&2; exit 1; }
+[ -f "$template" ] || { echo "Template not found at $template -- run this script from a clone of the claude-memory repo." >&2; exit 1; }
+[ -f "$snippet"  ] || { echo "Snippet not found at $snippet -- run this script from a clone of the claude-memory repo." >&2; exit 1; }
+
+# Normalize: strip CR, strip trailing whitespace per line, strip trailing blank lines.
+normalize() {
+    local file=$1
+    awk '{ sub(/\r$/, ""); sub(/[ \t]+$/, ""); print }' "$file" \
+        | awk 'BEGIN{n=0} {a[n++]=$0} END{ while (n>0 && a[n-1]=="") n--; for (i=0;i<n;i++) print a[i] }'
+}
+
+# Extract the '## Cross-project memory' section (header through the line
+# immediately before the next H2 or EOF). Prints nothing if not found.
+extract_claudemd_section() {
+    local file=$1
+    normalize "$file" | awk '
+        /^## Cross-project memory[[:space:]]*$/ { in_section = 1; print; next }
+        in_section && /^## / { in_section = 0 }
+        in_section { print }
+    ' | awk 'BEGIN{n=0} {a[n++]=$0} END{ while (n>0 && a[n-1]=="") n--; for (i=0;i<n;i++) print a[i] }'
+}
+
+# Extract MEMORY.md preamble: from start through line immediately before
+# '## Entries'. Prints nothing if '## Entries' missing.
+extract_memorymd_preamble() {
+    local file=$1
+    normalize "$file" | awk '
+        /^## Entries[[:space:]]*$/ { found=1; exit }
+        { print }
+        END { if (!found) exit 2 }
+    '
+}
+
+has_entries_marker() {
+    local file=$1
+    grep -qE '^## Entries[[:space:]]*$' "$file"
+}
+
+has_section_marker() {
+    local file=$1
+    grep -qE '^## Cross-project memory[[:space:]]*$' "$file"
+}
+
+show_diff() {
+    local label=$1
+    local live=$2
+    local canonical=$3
+    echo ""
+    echo "  ---- diff: $label ----"
+    diff -u --label "live"      <(printf '%s\n' "$live") \
+            --label "canonical" <(printf '%s\n' "$canonical") || true
+    echo "  ---- end diff ----"
+    echo ""
+}
+
+# Replace lines [start_re, next_h2 or EOF) in $file with contents of $replacement.
+replace_claudemd_section() {
+    local file=$1
+    local replacement=$2  # path to file containing canonical section
+    local tmp
+    tmp="$(mktemp)"
+    awk -v repl_file="$replacement" '
+        BEGIN {
+            while ((getline line < repl_file) > 0) {
+                repl = repl ? repl "\n" line : line
+            }
+            close(repl_file)
+        }
+        /^## Cross-project memory[[:space:]]*$/ {
+            if (!emitted) {
+                print repl
+                print ""
+                emitted = 1
+            }
+            skipping = 1
+            next
+        }
+        skipping && /^## / { skipping = 0 }
+        !skipping { print }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+}
+
+# Replace the preamble (everything up to '## Entries') in $file with
+# the preamble extracted from $template.
+replace_memorymd_preamble() {
+    local file=$1
+    local template=$2
+    local tmp
+    tmp="$(mktemp)"
+    awk -v tpl_file="$template" '
+        BEGIN {
+            while ((getline line < tpl_file) > 0) {
+                if (line ~ /^## Entries[[:space:]]*$/) { break }
+                pre = pre ? pre "\n" line : line
+            }
+            close(tpl_file)
+            # Strip trailing blank lines from preamble
+            sub(/\n+$/, "", pre)
+        }
+        ! shown {
+            print pre
+            print ""
+            shown = 1
+        }
+        /^## Entries[[:space:]]*$/ { copying = 1 }
+        copying { print }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+}
 
 summary=()
+drift_reported=0
+
+note() { summary+=("$1"); }
+write_action() {
+    # $1 = message for dry-run, $2 = command to run
+    if [[ "$dry_run" -eq 1 ]]; then
+        echo "  [dry-run] would: $1"
+    else
+        eval "$2"
+    fi
+}
 
 # 1. Memory directory
 if [ ! -d "$memory_dir" ]; then
-    mkdir -p "$memory_dir"
-    summary+=("  created   $memory_dir")
+    if [[ "$dry_run" -eq 0 ]]; then
+        mkdir -p "$memory_dir"
+    fi
+    note "  created   $memory_dir"
 else
-    summary+=("  exists    $memory_dir")
+    note "  exists    $memory_dir"
 fi
 
-# 2. MEMORY.md index
+# 2. MEMORY.md
 if [ ! -f "$memory_index" ]; then
-    cp "$template" "$memory_index"
-    summary+=("  created   $memory_index (from template)")
+    if [[ "$dry_run" -eq 0 ]]; then
+        cp "$template" "$memory_index"
+    fi
+    note "  created   $memory_index (from template)"
 else
-    summary+=("  exists    $memory_index (left untouched)")
+    if ! has_entries_marker "$memory_index"; then
+        note "  WARN      $memory_index (missing '## Entries' marker; refusing to touch)"
+    else
+        live_preamble="$(extract_memorymd_preamble "$memory_index")"
+        tpl_preamble="$(extract_memorymd_preamble "$template")"
+        if [[ "$live_preamble" == "$tpl_preamble" ]]; then
+            note "  exists    $memory_index (preamble matches template)"
+        elif [[ "$force" -eq 1 ]]; then
+            if [[ "$dry_run" -eq 0 ]]; then
+                replace_memorymd_preamble "$memory_index" "$template"
+            fi
+            note "  synced    $memory_index (preamble replaced)"
+        else
+            note "  DRIFT     $memory_index (preamble differs from template; re-run with --force to sync)"
+            show_diff "MEMORY.md preamble" "$live_preamble" "$tpl_preamble"
+            drift_reported=1
+        fi
+    fi
 fi
 
-# 3 + 4. CLAUDE.md + section
-section_marker="## Cross-project memory"
-needs_append=0
-
+# 3 + 4. CLAUDE.md
 if [ ! -f "$claude_md" ]; then
-    cat > "$claude_md" <<'EOF'
+    if [[ "$dry_run" -eq 0 ]]; then
+        {
+            cat <<'EOF'
 # Global CLAUDE.md
 
 Personal preferences and conventions that apply across all projects.
 Project-specific guidance lives in each repo's CLAUDE.md.
 
 EOF
-    summary+=("  created   $claude_md (with minimal header)")
-    needs_append=1
-elif grep -qF "$section_marker" "$claude_md"; then
-    summary+=("  exists    $claude_md (section already present, skipping)")
-else
-    summary+=("  exists    $claude_md (section missing, appending)")
-    needs_append=1
-fi
-
-if [ "$needs_append" -eq 1 ]; then
-    # Ensure file ends with newline before appending
-    if [ -s "$claude_md" ]; then
-        last_char="$(tail -c 1 "$claude_md")"
-        [ -n "$last_char" ] && printf '\n' >> "$claude_md"
+            cat "$snippet"
+        } > "$claude_md"
     fi
-    # Add blank-line separator before our new section
-    printf '\n' >> "$claude_md"
-    cat "$snippet" >> "$claude_md"
-    # Ensure trailing newline
-    last_char="$(tail -c 1 "$claude_md")"
-    [ -n "$last_char" ] && printf '\n' >> "$claude_md"
-    summary+=("  appended  cross-project memory section to $claude_md")
+    note "  created   $claude_md (with minimal header + section)"
+else
+    if ! has_section_marker "$claude_md"; then
+        # Append snippet with a blank-line separator.
+        if [[ "$dry_run" -eq 0 ]]; then
+            # Ensure trailing newline before appending
+            if [ -s "$claude_md" ] && [ "$(tail -c 1 "$claude_md" | wc -c)" -gt 0 ]; then
+                printf '\n' >> "$claude_md"
+            fi
+            printf '\n' >> "$claude_md"
+            cat "$snippet" >> "$claude_md"
+            last_char="$(tail -c 1 "$claude_md")"
+            [ -n "$last_char" ] && printf '\n' >> "$claude_md"
+        fi
+        note "  appended  cross-project memory section to $claude_md"
+    else
+        live_section="$(extract_claudemd_section "$claude_md")"
+        canonical_section="$(normalize "$snippet")"
+        if [[ "$live_section" == "$canonical_section" ]]; then
+            note "  exists    $claude_md (section matches canonical snippet)"
+        elif [[ "$force" -eq 1 ]]; then
+            if [[ "$dry_run" -eq 0 ]]; then
+                replace_claudemd_section "$claude_md" "$snippet"
+            fi
+            note "  synced    $claude_md (section replaced)"
+        else
+            note "  DRIFT     $claude_md (section differs from snippet; re-run with --force to sync)"
+            show_diff "CLAUDE.md cross-project section" "$live_section" "$canonical_section"
+            drift_reported=1
+        fi
+    fi
 fi
 
 echo ""
@@ -90,7 +262,15 @@ for item in "${summary[@]}"; do
     echo "$item"
 done
 echo ""
+if [[ "$drift_reported" -eq 1 ]]; then
+    cat <<'EOF'
+Drift detected. Re-run with --force to overwrite the drifted regions with the
+canonical content shipped in this repo. Hand-customisations inside those
+regions will be lost; customisations outside them are preserved.
+
+EOF
+fi
 echo "Next steps:"
-echo "  - Open ~/.claude/CLAUDE.md and confirm the new section reads well."
-echo "  - Optionally seed ~/.claude/memory/user_identity.md (see BOOTSTRAP.md step 4)."
+echo "  - Open ~/.claude/CLAUDE.md and confirm the section reads well."
+echo "  - Optionally seed ~/.claude/memory/user_identity.md (see BOOTSTRAP.md)."
 echo "  - Save memories as you work; the system fills itself."
