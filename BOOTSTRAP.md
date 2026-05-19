@@ -1,16 +1,53 @@
 # Bootstrap the cross-project memory layer
 
-Five-minute setup. Run once per machine.
+Run once per machine. There's a script for the impatient and a manual
+recipe for the curious — they produce the same result.
 
 > Memories don't sync across machines. This repo ships only the scaffold —
 > existing entries on another machine stay there; this machine's
 > `~/.claude/memory/` starts empty and fills as you work.
 
-## 1. Create the memory directory
+## Quick path (recommended)
 
-Resolve the absolute path of `~/.claude/memory/` for this machine (it's
-under `$HOME` on macOS/Linux, `$env:USERPROFILE` on Windows). Create it
-if it doesn't exist.
+From your clone of this repo:
+
+```bash
+# macOS / Linux
+./bootstrap.sh
+```
+
+```powershell
+# Windows
+.\bootstrap.ps1
+```
+
+The script does steps 1–3 below and prints a summary of what changed.
+It's **idempotent**: re-running is a no-op once the system is in place.
+Nothing on disk is duplicated, nothing already there is overwritten —
+including a hand-customised `~/.claude/CLAUDE.md` whose existing
+sections stay exactly where they are.
+
+After running, optionally seed `user_identity.md` (step 4) and verify
+(step 5). Done.
+
+### PowerShell execution policy
+
+If running `.\bootstrap.ps1` errors out with "running scripts is
+disabled," either invoke once with bypass:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1
+```
+
+…or flip the user-scope policy once:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+## Manual recipe (if you'd rather see each step)
+
+### 1. Create the memory directory
 
 ```bash
 # macOS / Linux
@@ -18,39 +55,47 @@ mkdir -p ~/.claude/memory
 ```
 
 ```powershell
-# Windows PowerShell
-New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.claude\memory" | Out-Null
+# Windows
+New-Item -ItemType Directory -Force `
+  -Path "$env:USERPROFILE\.claude\memory" | Out-Null
 ```
 
-## 2. Seed `MEMORY.md` from the template
+### 2. Seed `MEMORY.md` from the template
 
-Copy [`MEMORY.md.template`](MEMORY.md.template) into the directory as
-`MEMORY.md`. Don't add entries yet — leave the **Entries** heading empty.
+Copy [`MEMORY.md.template`](MEMORY.md.template) into the new directory
+as `MEMORY.md`. Don't add entries yet — leave the **Entries** heading
+empty.
 
 ```bash
-# macOS / Linux (from a clone of this repo)
 cp MEMORY.md.template ~/.claude/memory/MEMORY.md
 ```
 
 ```powershell
-# Windows PowerShell (from a clone of this repo)
 Copy-Item MEMORY.md.template "$env:USERPROFILE\.claude\memory\MEMORY.md"
 ```
 
-## 3. Tell Claude Code to read the index at session start
+### 3. Tell Claude Code to read the index at session start
 
-Open (or create) the **global** `~/.claude/CLAUDE.md`. Add the snippet
-from [`snippets/cross-project-memory-claude-md.md`](snippets/cross-project-memory-claude-md.md)
-as a section. This is what tells future Claude Code sessions to load the
-index when they boot.
+Open (or create) the **global** `~/.claude/CLAUDE.md`. Append the
+contents of [`snippets/cross-project-memory-claude-md.md`](snippets/cross-project-memory-claude-md.md)
+verbatim — the file is the section itself, no commentary to strip.
+That's what tells future Claude Code sessions to load the index at
+session start.
 
-If a "Cross-project memory" section already exists, update its paths to
-match this machine — don't duplicate.
+If a "Cross-project memory" section already exists in your `CLAUDE.md`,
+update its paths to match this machine instead of duplicating. (The
+script does this check for you.)
+
+> **Windows path note.** The harness reads `~/.claude/CLAUDE.md`
+> correctly with the tilde, but if you need to reference these paths
+> in a context that doesn't expand `~` (for example, a hook `command`
+> string in `settings.json`), expand it manually:
+> `C:\Users\<you>\.claude\memory\MEMORY.md`.
 
 ## 4. Optionally seed `user_identity.md`
 
-Skip unless you want to. If you'd rather have your name/email pre-loaded
-into every session, create one entry:
+Skip unless you want to. If you'd rather have your name/email
+pre-loaded into every session, create one entry:
 
 ```markdown
 ---
@@ -67,8 +112,8 @@ type: user
 ```
 
 Save as `~/.claude/memory/user_identity.md` and add a line to
-`~/.claude/memory/MEMORY.md` under **Entries** linking to it. That's the
-only seed worth doing during bootstrap; everything else accrues
+`~/.claude/memory/MEMORY.md` under **Entries** linking to it. That's
+the only seed worth doing during bootstrap; everything else accrues
 naturally.
 
 ## 5. Verify

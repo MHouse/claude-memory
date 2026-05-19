@@ -61,12 +61,21 @@ individual files, ordered however you find useful.
 
 ## Quick start
 
-See [BOOTSTRAP.md](BOOTSTRAP.md). Three small steps:
+```bash
+git clone https://github.com/MHouse/claude-memory.git
+cd claude-memory
+./bootstrap.sh        # macOS / Linux
+# or
+.\bootstrap.ps1       # Windows
+```
 
-1. Create `~/.claude/memory/` and seed `MEMORY.md` from the template here.
-2. Paste the **Cross-project memory** snippet into your global
-   `~/.claude/CLAUDE.md` so Claude reads the index at session start.
-3. Save memories as you work; let the index fill naturally.
+The script is idempotent — it creates `~/.claude/memory/`, seeds an empty
+`MEMORY.md` from the template, ensures `~/.claude/CLAUDE.md` exists, and
+appends the cross-project memory section if it isn't already there.
+Re-running is a no-op once the system is in place; existing customisations
+in `CLAUDE.md` are preserved.
+
+For the manual recipe, see [BOOTSTRAP.md](BOOTSTRAP.md).
 
 ## Maintenance
 
