@@ -8,3 +8,4 @@ Thumbs.db
 # Local-only working files
 *.local.*
 scratch/
+.context/
