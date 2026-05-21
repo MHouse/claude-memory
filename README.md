@@ -39,8 +39,11 @@ machine everywhere, save it under `~/.claude/memory/`. Both use the same
 file format and frontmatter conventions, so promoting a per-project
 memory to cross-project is a `mv` between dirs.
 
-The `<slug>` in the per-project path is derived from the working-directory
-path; you don't pick it.
+The `<slug>` in the per-project path is harness-derived from the
+working-directory path — each clone, worktree, and platform gets its
+own. You don't compute it: the harness states the active directory at
+session start, and to locate a sibling project's memory, list
+`~/.claude/projects/` and match by basename.
 
 **Cost note.** The cross-project layer loads its index (`MEMORY.md`)
 into every session, in every project, by design. The real constraint
