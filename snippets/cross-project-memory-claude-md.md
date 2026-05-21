@@ -3,10 +3,16 @@
 <!-- Section managed by the claude-memory bootstrap (re-run with -Force / --force to resync). -->
 
 `~/.claude/memory/` is the cross-project counterpart to the per-project
-auto-memory directory at `~/.claude/projects/<slug>/memory/`. The index
-lives at `~/.claude/memory/MEMORY.md`; entries linked from it are short
-Markdown files with `name` / `description` / `type` frontmatter where
-`type ∈ user, feedback, project, reference`.
+auto-memory directory at `~/.claude/projects/<slug>/memory/`. The
+harness states the active per-project directory verbatim at session
+start; each working directory (clone, worktree, platform) gets its own
+slug, so finding a *sibling* project's memory directory is a matter of
+listing `~/.claude/projects/` and matching by basename — don't try to
+construct the slug from a path.
+
+The index lives at `~/.claude/memory/MEMORY.md`; entries linked from it
+are short Markdown files with `name` / `description` / `type`
+frontmatter where `type ∈ user, feedback, project, reference`.
 
 At session start, read `~/.claude/memory/MEMORY.md` and load any entries
 that look relevant to the current task. Treat its contents as additive
