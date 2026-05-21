@@ -1,6 +1,6 @@
 # claude-memory
 
-**Global, cross-project memory for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — the layer that survives across projects, complementing the built-in `/remember` (which is per-project).**
+**Global, cross-project memory for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — the layer that survives across projects, complementing the built-in `/remember` (which is per-project). Just files plus install hygiene: no daemon, retrieval layer, auto-capture pipeline, or sync.**
 
 Sets up a small Markdown memory store at `~/.claude/memory/` that future
 Claude Code sessions read at session start — so durable knowledge
@@ -82,8 +82,10 @@ memory (which Conneely's recipe doesn't acknowledge).
 
 **vs `claude-mem`** — a different scale of system entirely. Pick
 `claude-mem` if you want auto-capture, semantic search, and a worker
-process running locally. Pick this if you want a Markdown file you can
-`cat` and a bootstrap that doesn't outlive the day you ran it.
+process running locally. Pick this if you want control over what gets
+saved, plain Markdown you can `cat` and audit, and a bootstrap that
+doesn't outlive the day you ran it. The trade is auto-magic for
+auditability.
 
 The lighter approaches (Huryn, Conneely, this repo) share one thing:
 Claude reads plain Markdown via its existing `Read` / `Edit` / `Write`
@@ -136,29 +138,11 @@ in `CLAUDE.md` are preserved.
 
 ### Keeping in sync when this repo updates
 
-The script also detects **drift** — i.e., when an earlier bootstrap dropped
-content into `~/.claude/memory/MEMORY.md` or `~/.claude/CLAUDE.md` but the
-canonical version in this repo has since changed. Re-run the bootstrap and:
-
-- Default mode prints a diff and exits without touching anything.
-- `--force` (`-Force` on Windows) rewrites the drifted regions with the
-  current canonical content. Customisations *inside* the managed regions
-  are lost; everything outside them is preserved.
-- `--dry-run` (`-WhatIf` on Windows) shows what would change without
-  writing.
-
-The managed regions are intentionally narrow:
-
-| File | Managed region | Per-machine (never touched) |
-|---|---|---|
-| `~/.claude/memory/MEMORY.md` | Everything above the `## Entries` heading | The `## Entries` section and everything below it |
-| `~/.claude/CLAUDE.md` | The `## Cross-project memory` section (header through the next H2 or EOF) | Everything outside that section |
-
-Each managed region carries an HTML comment marker (`Section managed by
-the claude-memory bootstrap…`) so the ownership is visible in the file
-itself.
-
-For the manual recipe, see [BOOTSTRAP.md](BOOTSTRAP.md).
+Re-running the bootstrap is a safe drift check: it diffs the managed
+regions in `~/.claude/memory/MEMORY.md` and `~/.claude/CLAUDE.md`
+against the canonical content in this repo, and `--force` / `-Force`
+resyncs them. Flag table, region boundaries, and the manual recipe
+live in [BOOTSTRAP.md](BOOTSTRAP.md).
 
 ## Maintenance
 
@@ -170,6 +154,10 @@ few months of accumulation, whichever comes first.
 
 ## What this repo deliberately does *not* do
 
+- **Run a daemon, worker, or MCP server.** Claude reads the files via
+  its existing `Read` / `Edit` / `Write` tools. No new tool surface,
+  no background process, no opaque store. If you want auto-capture
+  or retrieval embeddings, pick a different tool.
 - **Ship anyone's actual memories.** Memories are personal and
   machine-local; this repo only carries the scaffold.
 - **Sync memories across machines.** Each install accrues its own
