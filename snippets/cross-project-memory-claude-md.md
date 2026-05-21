@@ -15,8 +15,12 @@ are short Markdown files with `name` / `description` / `type`
 frontmatter where `type ∈ user, feedback, project, reference`.
 
 At session start, read `~/.claude/memory/MEMORY.md` and load any entries
-that look relevant to the current task. Treat its contents as additive
-to whatever project-scoped memory is loaded automatically.
+that look relevant to the current task. This is the **cross-project**
+layer; it coexists with the harness's **per-project** auto-memory
+under `~/.claude/projects/<slug>/memory/` — separate scope, same file
+format and `type` frontmatter. Treat this index as additive to
+per-project memory; the same fact doesn't live in both layers, and the
+save threshold below routes between them.
 
 A memory belongs in `~/.claude/memory/` only if (a) the same fact would
 be useful in at least two unrelated projects on this machine, or (b)
